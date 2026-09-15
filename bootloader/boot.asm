@@ -2,8 +2,8 @@
 ; x86 16-bit real mode bootloader
 ; Loads kernel and switches to protected mode
 
-BITS 16
-ORG 0x7C00
+[BITS 16]
+[ORG 0x7C00]
 
 ; Boot sector header
 boot_start:
@@ -114,7 +114,7 @@ gdt_descriptor:
     dd gdt_start
 
 ; Protected mode
-BITS 32
+[BITS 32]
 protected_mode:
     mov ax, 0x10                ; Data segment selector
     mov ds, ax
