@@ -1,38 +1,42 @@
-CC = i686-elf-gcc
+CC = i686-w64-mingw32-gcc
 AS = nasm
-LD = i686-elf-ld
-CFLAGS = -ffreestanding -fno-builtin -Wall -Wextra -I./kernel
-ASFLAGS = -f elf
+LD = i686-w64-mingw32-ld
+OBJCOPY = i686-w64-mingw32-objcopy
+CFLAGS = -ffreestanding -fno-builtin -Wall -Wextra -I./kernel -fno-asynchronous-unwind-tables
+ASFLAGS = -f win32
 
-all: nativebox.iso
+.PHONY: all clean run debug
+
+all: nativebox.bin
 
 # Build bootloader
 bootloader/boot.bin: bootloader/boot.asm
-	$(AS) -f bin -o $@ $<
+	$(AS) $(ASFLAGS) -o bootloader/boot.o $<
+	$(LD) -T kernel/link.ld -o bootloader/boot.elf bootloader/boot.o
+	$(OBJCOPY) -O binary bootloader/boot.elf $@
 
 # Build kernel object files
 kernel/kernel.o: kernel/kernel.c kernel/kernel.h
-	$(CC) $(CFLAGS) -c -o $@ kernel/kernel.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-# Link everything together
-nativebox.elf: bootloader/boot.bin kernel/kernel.o
-	$(LD) -T kernel/link.ld -o $@ kernel/kernel.o
+# Link everything together (PE format)
+nativebox.exe: bootloader/boot.bin kernel/kernel.o
+	$(LD) -T kernel/link.ld --oformat pei-i386 -o $@ kernel/kernel.o
 
-# Create ISO image
-nativebox.iso: nativebox.elf
-	# Create ISO using grub-mkrescue or similar tool
-	# This requires additional setup with GRUB bootloader
+# Convert to raw binary
+nativebox.bin: nativebox.exe
+	$(OBJCOPY) -O binary $< $@
 
 # Run in QEMU
-run: nativebox.iso
-	qemu-system-i386 -cdrom nativebox.iso -m 64
+run: nativebox.bin
+	qemu-system-i386 -drive file=$<,format=raw -m 64
 
-# Run with debugging
-debug: nativebox.elf
-	qemu-system-i386 -kernel nativebox.elf -m 64 -S -gdb tcp::1234
+# Debug with GDB
+debug: nativebox.exe
+	qemu-system-i386 -drive file=nativebox.bin,format=raw -m 64 -S -gdb tcp::1234
 
 # Clean build artifacts
 clean:
-	rm -f bootloader/boot.bin kernel/kernel.o nativebox.elf nativebox.iso
-
-.PHONY: all run debug clean
+	rm -f bootloader/boot.o bootloader/boot.elf bootloader/boot.bin
+	rm -f kernel/kernel.o
+	rm -f nativebox.exe nativebox.bin
